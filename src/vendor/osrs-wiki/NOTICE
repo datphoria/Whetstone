@@ -1,0 +1,10 @@
+OSRS Wiki DPS Calculator engine
+
+Source: https://github.com/weirdgloop/osrs-dps-calc
+Revision: 91218d63e71927e99748a50d008975336025a88e
+License: GNU General Public License v3.0
+
+The generated engine bundle is derived from the upstream calculator. UI image
+imports are replaced with empty values because Gearscape does not render them.
+Combat formulas, equipment metadata, monster metadata, and calculation logic
+remain upstream code.

@@ -1,0 +1,50 @@
+{
+  "name": "gearscape-2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OSRS gear DPS calculator with Best Setup and upgrade advisor (mains GE / irons drop rates)",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "sync:data": "tsx scripts/sync-wiki-data.ts",
+    "sync:seed": "tsx scripts/generate-seed-data.ts",
+    "sync:prices": "tsx scripts/sync-prices.ts",
+    "sync:reconcile": "tsx scripts/reconcile-equipment.ts",
+    "sync:dps-engine": "node scripts/sync-dps-engine.mjs",
+    "test:parity": "tsx --test tests/parity/*.test.ts",
+    "test:parity:integrity": "tsx --test tests/parity/integrity.test.ts",
+    "test:parity:adapter": "tsx --test tests/parity/adapter.test.ts",
+    "test:parity:optimizer": "tsx --test tests/parity/optimizer.test.ts",
+    "test:parity:pricing": "tsx --test tests/parity/pricing.test.ts",
+    "test": "npm run test:parity"
+  },
+  "dependencies": {
+    "axios": "^1.19.0",
+    "d3-array": "^3.2.4",
+    "lodash.mergewith": "^4.6.2",
+    "next": "^15.5.23",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "recharts": "^3.10.1",
+    "type-fest": "^5.8.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/lodash.mergewith": "^4.6.9",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.0",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}

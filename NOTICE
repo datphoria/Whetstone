@@ -1,0 +1,21 @@
+NOTICE
+
+The combat engine is generated directly from the open-source OSRS Wiki DPS
+Calculator:
+
+  https://github.com/weirdgloop/osrs-dps-calc
+  License: GNU General Public License v3.0
+
+The exact pinned revision is recorded in
+src/vendor/osrs-wiki/version.json. Run `npm run sync:dps-engine` to update the
+generated engine from upstream.
+
+Which itself acknowledges Bitterkoekje's DPS spreadsheet and OSRS Wiki
+contributors for item, monster, and spell data.
+
+This project is an independent implementation inspired by the feature set of
+GearScape (https://gearscape.net/). It does not include GearScape proprietary
+source code, assets, or branding.
+
+Game data is sourced from the Old School RuneScape Wiki
+(https://oldschool.runescape.wiki/) under applicable wiki licensing.
