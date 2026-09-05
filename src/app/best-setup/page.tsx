@@ -235,7 +235,7 @@ export default function BestSetupPage() {
       <div>
         <h1 className="text-2xl font-bold">Best Setup</h1>
         <p className="text-sm text-[var(--muted)]">
-          Import your bank and Gearscape first shows the best setup you can build right now, then what buying or
+          Import your bank and Whetstone first shows the best setup you can build right now, then what buying or
           unlocking gear would add, ordered by cheapest DPS gain. Tick{" "}
           <span className="text-[var(--text)]">On Slayer task</span> for slayer-only bosses. DPS for every result comes
           from the exact Wiki engine; the full-catalogue search itself is a heuristic beam search.

@@ -259,7 +259,7 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: "gearscape2-store",
+      name: "whetstone-store",
       partialize: (s) => ({
         loadouts: s.loadouts,
         activeLoadoutId: s.activeLoadoutId,

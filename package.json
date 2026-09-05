@@ -1,8 +1,8 @@
 {
-  "name": "gearscape-2",
+  "name": "whetstone",
   "version": "1.0.0",
   "private": true,
-  "description": "OSRS gear DPS calculator with Best Setup and upgrade advisor (mains GE / irons drop rates)",
+  "description": "Whetstone — OSRS DPS calculator, Best Setup optimizer, and upgrade advisor for mains and irons",
   "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "next dev --turbopack",

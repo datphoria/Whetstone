@@ -14,7 +14,7 @@ function syncedPrices(): Record<string, number> {
 }
 
 const USER_AGENT =
-  "Gearscape2DpsCalc/1.0 (OSRS gear calculator; https://localhost; contact: local)";
+  "WhetstoneDpsCalc/1.0 (OSRS gear calculator; https://localhost; contact: local)";
 
 let cache: { at: number; prices: Record<string, number> } | null = null;
 const TTL_MS = 5 * 60 * 1000;

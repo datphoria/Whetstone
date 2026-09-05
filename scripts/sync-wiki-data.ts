@@ -19,7 +19,7 @@ import type {
 } from "../src/lib/types";
 
 const USER_AGENT =
-  "Gearscape2DpsCalc/1.0 (OSRS gear calculator; local-dev; contact: local)";
+  "WhetstoneDpsCalc/1.0 (OSRS gear calculator; local-dev; contact: local)";
 
 const WIKI = "https://oldschool.runescape.wiki/api.php";
 const PRICES = "https://prices.runescape.wiki/api/v1/osrs/latest";

@@ -36,7 +36,7 @@ function choosePrimaryMonster(variants: MonsterStats[]): MonsterStats {
 }
 
 /**
- * Gearscape-style list: one primary entry per Wiki monster page.
+ * One primary entry per Wiki monster page (variant selector handles the rest).
  * Combat states/forms remain available through getMonsterVariants().
  */
 const primaryMonsters: MonsterStats[] = (() => {

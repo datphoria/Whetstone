@@ -59,7 +59,7 @@ await build({
   stdin: {
     contents: entry,
     resolveDir: sourceRoot,
-    sourcefile: "gearscape-engine-entry.ts",
+    sourcefile: "whetstone-engine-entry.ts",
     loader: "ts",
   },
   absWorkingDir: sourceRoot,
@@ -108,7 +108,7 @@ Revision: ${revision}
 License: GNU General Public License v3.0
 
 The generated engine bundle is derived from the upstream calculator. UI image
-imports are replaced with empty values because Gearscape does not render them.
+imports are replaced with empty values because Whetstone does not render them.
 Combat formulas, equipment metadata, monster metadata, and calculation logic
 remain upstream code.
 `;

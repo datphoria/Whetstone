@@ -449,7 +449,7 @@ export function calculateWikiPlayerDps(
   };
 }
 
-/** Direct engine result for parity tests (bypasses Gearscape rounding only after calc). */
+/** Direct engine result for parity tests (bypasses Whetstone rounding only after calc). */
 export function calculateNativePlayerMetrics(
   loadout: Loadout,
   monster: MonsterStats,

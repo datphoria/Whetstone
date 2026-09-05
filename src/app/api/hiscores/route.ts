@@ -47,7 +47,7 @@ async function fetchJagexHiscores(username: string): Promise<PlayerSkills | null
   const url = `https://secure.runescape.com/m=hiscore_oldschool/index_lite.ws?player=${encodeURIComponent(username)}`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Gearscape2DpsCalc/1.0 (local; hiscores import)",
+      "User-Agent": "WhetstoneDpsCalc/1.0 (local; hiscores import)",
       Accept: "text/plain",
     },
     cache: "no-store",
@@ -82,7 +82,7 @@ async function fetchWomHiscores(username: string): Promise<{ skills: PlayerSkill
       {
         headers: {
           Accept: "application/json",
-          "User-Agent": "Gearscape2DpsCalc/1.0 (local; hiscores import)",
+          "User-Agent": "WhetstoneDpsCalc/1.0 (local; hiscores import)",
         },
         cache: "no-store",
       },
