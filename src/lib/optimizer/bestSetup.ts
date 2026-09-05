@@ -211,9 +211,12 @@ function isUsableItem(item: EquipmentItem): boolean {
   if (item.slot === "weapon" && (!item.attackTypes || item.attackTypes.length === 0)) {
     return false;
   }
+  // Empty / broken / inactive shells cannot fight. Uncharged weapons often can —
+  // Ursine / Viggora's chainmace keep full crush stats outside the Wilderness,
+  // so banning every "(Uncharged)" label wrongly drops them for zombie axe.
   if (
     (item.slot === "weapon" || item.slot === "shield") &&
-    /\b(uncharged|unpowered|inactive|empty|broken)\b/.test(source)
+    /\b(unpowered|inactive|empty|broken)\b/.test(source)
   ) {
     return false;
   }

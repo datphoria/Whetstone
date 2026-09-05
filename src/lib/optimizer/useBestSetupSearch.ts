@@ -12,20 +12,28 @@ import type {
   BestSetupWorkerRequest,
   BestSetupWorkerResponse,
 } from "@/lib/optimizer/bestSetup.worker";
+import { defaultStretchBudget } from "@/lib/prices/stretchBudget";
 import type { Loadout, MonsterStats } from "@/lib/types";
 
-export type BestSetupRunOptions = Omit<BestSetupOptions, "onProgress" | "signal" | "itemPool">;
+export type BestSetupRunOptions = Omit<BestSetupOptions, "onProgress" | "signal" | "itemPool"> & {
+  /** When above `budget`, run an extra pass for near-affordable setups. */
+  stretchBudget?: number;
+  /** Opt out of the stretch pass even when stretchBudget is higher. */
+  includeStretch?: boolean;
+};
 
 interface UseBestSetupSearchResult {
   running: boolean;
-  /** Which pass is running: what you can build now, or what you can obtain. */
+  /** Which pass is running: bank, affordable, or stretch. */
   stage: BestSetupStage | null;
   progress: BestSetupProgress | null;
   /** Best setups using only imported bank items. */
   bankResults: BestSetupCandidate[];
-  /** Best setups once purchases / in-game unlocks are allowed. */
+  /** Best setups once purchases / in-game unlocks are allowed within budget. */
   results: BestSetupCandidate[];
-  /** Cheapest-first order for closing the gap between the two, when both exist. */
+  /** Best setups within the stretch ceiling (above cash on hand). */
+  stretchResults: BestSetupCandidate[];
+  /** Cheapest-first order for closing the gap between bank and affordable target. */
   upgradePath: UpgradePath | null;
   error: string | null;
   run: (base: Loadout, monster: MonsterStats, opts: BestSetupRunOptions) => void;
@@ -43,12 +51,16 @@ function bankStageOptions(opts: BestSetupRunOptions): BestSetupRunOptions {
   };
 }
 
+function emptyCollected(): Record<BestSetupStage, BestSetupCandidate[]> {
+  return { bank: [], target: [], stretch: [] };
+}
+
 /**
  * Runs Best Setup off the main thread when Workers are available; otherwise
  * falls back to an async main-thread search that yields between attack types.
  *
- * Searches run in two passes so the user first sees the best setup they can
- * build from their bank right now, then what buying / unlocking gear adds.
+ * Searches run in passes so the user first sees the best setup from their bank,
+ * then what buying within budget adds, then near-budget stretch goals.
  */
 export function useBestSetupSearch(): UseBestSetupSearchResult {
   const [running, setRunning] = useState(false);
@@ -56,6 +68,7 @@ export function useBestSetupSearch(): UseBestSetupSearchResult {
   const [progress, setProgress] = useState<BestSetupProgress | null>(null);
   const [bankResults, setBankResults] = useState<BestSetupCandidate[]>([]);
   const [results, setResults] = useState<BestSetupCandidate[]>([]);
+  const [stretchResults, setStretchResults] = useState<BestSetupCandidate[]>([]);
   const [upgradePath, setUpgradePath] = useState<UpgradePath | null>(null);
   const [error, setError] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -97,6 +110,7 @@ export function useBestSetupSearch(): UseBestSetupSearchResult {
     cancel();
     setResults([]);
     setBankResults([]);
+    setStretchResults([]);
     setUpgradePath(null);
     setProgress(null);
     setError(null);
@@ -108,23 +122,72 @@ export function useBestSetupSearch(): UseBestSetupSearchResult {
       const hasBank = (opts.ownedItemIds?.length ?? 0) > 0;
       // A bank-only request, or an iron, already answers "what can I build now".
       const bankOnly = opts.restrictToOwned === true || opts.accountMode === "iron";
+      const stretchCeiling =
+        opts.stretchBudget ?? defaultStretchBudget(opts.budget);
+      const wantStretch =
+        !bankOnly &&
+        opts.includeStretch !== false &&
+        opts.accountMode === "main" &&
+        stretchCeiling > opts.budget;
+
       const stages: { stage: BestSetupStage; opts: BestSetupRunOptions }[] = [];
       if (hasBank && !bankOnly) stages.push({ stage: "bank", opts: bankStageOptions(opts) });
       stages.push({ stage: bankOnly ? "bank" : "target", opts });
+      if (wantStretch) {
+        stages.push({
+          stage: "stretch",
+          opts: { ...opts, budget: stretchCeiling },
+        });
+      }
 
       setRunning(true);
       setError(null);
       setResults([]);
       setBankResults([]);
+      setStretchResults([]);
       setUpgradePath(null);
       setStage(stages[0].stage);
       setProgress({ phase: "starting", percent: 0, message: "Starting search…" });
 
-      const collected: Record<BestSetupStage, BestSetupCandidate[]> = { bank: [], target: [] };
+      const collected = emptyCollected();
       const store = (stageName: BestSetupStage, found: BestSetupCandidate[]) => {
-        collected[stageName] = found;
-        if (stageName === "bank") setBankResults(found);
-        else setResults(found);
+        let next = found;
+        if (stageName === "stretch") {
+          // Only keep stretch setups that actually spend above cash-on-hand and
+          // improve on the affordable pass — otherwise it's a duplicate card.
+          const affordableBest = collected.target[0]?.dps ?? -Infinity;
+          next = found.filter(
+            (candidate) =>
+              candidate.purchaseCost > opts.budget && candidate.dps > affordableBest + 0.001,
+          );
+        }
+        collected[stageName] = next;
+        if (stageName === "bank") setBankResults(next);
+        else if (stageName === "stretch") setStretchResults(next);
+        else setResults(next);
+      };
+
+      const finishUpgradePath = (worker: Worker | null) => {
+        const target = collected.target[0] ?? collected.bank[0];
+        const bank = collected.bank[0];
+        if (target && bank && collected.target[0]) {
+          if (worker) {
+            worker.postMessage({
+              type: "upgradePath",
+              requestId,
+              base,
+              monster,
+              opts,
+              input: {
+                from: bank.loadout.equipment,
+                to: target.loadout.equipment,
+                attackTypes: opts.allowedAttackTypes,
+              },
+            } satisfies BestSetupWorkerRequest);
+            return true;
+          }
+        }
+        return false;
       };
 
       const worker = ensureWorker();
@@ -167,24 +230,8 @@ export function useBestSetupSearch(): UseBestSetupSearchResult {
             post();
             return;
           }
-          const target = collected.target[0];
-          const bank = collected.bank[0];
-          if (target && bank) {
-            worker.postMessage({
-              type: "upgradePath",
-              requestId,
-              base,
-              monster,
-              opts,
-              input: {
-                from: bank.loadout.equipment,
-                to: target.loadout.equipment,
-                attackTypes: opts.allowedAttackTypes,
-              },
-            } satisfies BestSetupWorkerRequest);
-          } else {
-            worker.removeEventListener("message", onMessage);
-          }
+          const waitingForPath = finishUpgradePath(worker);
+          if (!waitingForPath) worker.removeEventListener("message", onMessage);
           setRunning(false);
           setStage(null);
           setProgress({
@@ -255,6 +302,7 @@ export function useBestSetupSearch(): UseBestSetupSearchResult {
     progress,
     bankResults,
     results,
+    stretchResults,
     upgradePath,
     error,
     run,

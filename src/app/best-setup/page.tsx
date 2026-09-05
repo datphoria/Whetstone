@@ -9,6 +9,7 @@ import type { BestSetupCandidate, SetupPlanEntry, UpgradePath } from "@/lib/opti
 import { useBestSetupSearch } from "@/lib/optimizer/useBestSetupSearch";
 import { acquisitionLabel } from "@/lib/prices/acquisition";
 import { fetchLivePrices, type LivePriceSnapshot } from "@/lib/prices/livePrices";
+import { defaultStretchBudget, shortfall } from "@/lib/prices/stretchBudget";
 import { useAppStore, createEmptyLoadout } from "@/lib/store/useAppStore";
 import type { AttackType } from "@/lib/types";
 import Link from "next/link";
@@ -74,15 +75,22 @@ function GearChips({ plan }: { plan: SetupPlanEntry[] }) {
 function SetupCard({
   candidate,
   headline,
+  budget,
   onApply,
 }: {
   candidate: BestSetupCandidate;
   headline?: string;
+  /** When set, label how far over cash-on-hand this setup is. */
+  budget?: number;
   onApply: () => void;
 }) {
   const earnCount = candidate.plan.filter(
     (entry) => entry.acquisition.kind === "earn" || entry.acquisition.earnSteps.length > 0,
   ).length;
+  const over =
+    budget != null && candidate.purchaseCost > budget
+      ? shortfall(candidate.purchaseCost, budget)
+      : 0;
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4">
       <div className="flex flex-wrap justify-between gap-2">
@@ -95,6 +103,9 @@ function SetupCard({
           <div className="text-sm text-[var(--muted)]">
             DPS {candidate.dps} · TTK {candidate.ttk}s · Acc {candidate.accuracy}%
             {candidate.purchaseCost > 0 && ` · Spend ${formatGp(candidate.purchaseCost)}`}
+            {over > 0 && (
+              <span className="text-[var(--accent-2)]"> · need {formatGp(over)} more</span>
+            )}
             {` · ${candidate.ownedItemsUsed} from bank`}
             {earnCount > 0 && ` · ${earnCount} to earn`}
           </div>
@@ -174,15 +185,27 @@ export default function BestSetupPage() {
   const [findMsg, setFindMsg] = useState("");
   const [includeUntradeables, setIncludeUntradeables] = useState(true);
   const [restrictToOwned, setRestrictToOwned] = useState(false);
+  const [includeStretch, setIncludeStretch] = useState(true);
   const [onTask, setOnTask] = useState(false);
   const [prices, setPrices] = useState<LivePriceSnapshot | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
-  const { running, stage, progress, bankResults, results, upgradePath, error, run, cancel } =
-    useBestSetupSearch();
+  const {
+    running,
+    stage,
+    progress,
+    bankResults,
+    results,
+    stretchResults,
+    upgradePath,
+    error,
+    run,
+    cancel,
+  } = useBestSetupSearch();
 
   const base = loadouts[0] ?? createEmptyLoadout();
   const meta = getDataMeta();
   const taskRequired = monster ? officialRequiresSlayerTask(monster) : false;
+  const stretchBudget = defaultStretchBudget(budget);
 
   useEffect(() => {
     setOnTask(loadouts[0]?.onTask ?? false);
@@ -298,6 +321,15 @@ export default function BestSetupPage() {
                 />
                 Allow gear with in-game steps (fire cape, imbues, Avernic hilt on a dragon defender…)
               </label>
+              <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={includeStretch}
+                  disabled={running || restrictToOwned}
+                  onChange={(e) => setIncludeStretch(e.target.checked)}
+                />
+                Show stretch goals up to {formatGp(stretchBudget)} (e.g. Bludgeon when you are a bit short)
+              </label>
             </div>
           ) : (
             <p className="text-xs text-[var(--muted)]">
@@ -380,6 +412,8 @@ export default function BestSetupPage() {
                 setFindMsg("");
                 run(base, monster, {
                   budget,
+                  stretchBudget,
+                  includeStretch,
                   accountMode,
                   includeUntradeables: restrictToOwned ? false : includeUntradeables,
                   restrictToOwned: accountMode === "main" ? restrictToOwned : false,
@@ -411,7 +445,11 @@ export default function BestSetupPage() {
         <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--panel)] p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="font-medium">
-              {stage === "bank" ? "Pass 1 — best from your bank: " : "Pass 2 — best you can obtain: "}
+              {stage === "bank"
+                ? "Pass 1 — best from your bank: "
+                : stage === "stretch"
+                  ? "Pass 3 — stretch goals: "
+                  : "Pass 2 — best you can afford: "}
               {progress?.message ?? "Searching…"}
             </span>
             <span className="text-[var(--muted)]">{Math.round(progress?.percent ?? 0)}%</span>
@@ -444,7 +482,7 @@ export default function BestSetupPage() {
       {results.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">
-            {bankResults.length > 0 ? "Best you can obtain" : "Best setup"}
+            {bankResults.length > 0 ? "Best you can afford" : "Best setup"}
           </h2>
           {results.map((r) => (
             <SetupCard
@@ -456,9 +494,31 @@ export default function BestSetupPage() {
         </section>
       )}
 
+      {stretchResults.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Close to affordable</h2>
+          <p className="text-xs text-[var(--muted)]">
+            Above your {formatGp(budget)} budget, searching up to {formatGp(stretchBudget)}. Use this to plan the
+            next big buy (Bludgeon, Torva pieces, etc.).
+          </p>
+          {stretchResults.map((r) => (
+            <SetupCard
+              key={`stretch-${r.attackType}-${r.prayer}`}
+              candidate={r}
+              budget={budget}
+              onApply={() => applyLoadout(r.loadout)}
+            />
+          ))}
+        </section>
+      )}
+
       {upgradePath && <UpgradePathCard path={upgradePath} />}
 
-      {!running && progress?.phase === "done" && results.length === 0 && bankResults.length === 0 && (
+      {!running &&
+        progress?.phase === "done" &&
+        results.length === 0 &&
+        bankResults.length === 0 &&
+        stretchResults.length === 0 && (
         <p className="text-sm text-[var(--muted)]">
           No setups found — check budget, bank import, or enabled styles.
         </p>

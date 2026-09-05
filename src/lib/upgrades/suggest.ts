@@ -5,6 +5,7 @@ import {
   type Acquisition,
   type PriceMap,
 } from "@/lib/prices/acquisition";
+import { defaultStretchBudget, shortfall } from "@/lib/prices/stretchBudget";
 import type {
   DropSource,
   EquipmentItem,
@@ -31,7 +32,9 @@ export interface UpgradeSuggestion {
   dropSources: DropSource[];
   easiestDrop: DropSource | null;
   obtainScore: number | null; // lower = easier (expected KC * log combat)
-  kind: "best" | "value" | "easiest";
+  kind: "best" | "value" | "easiest" | "stretch";
+  /** GP still needed when this upgrade sits above the current budget. */
+  shortfall?: number;
 }
 
 function resolve(equipment: LoadoutEquipment): (EquipmentItem | null)[] {
@@ -49,11 +52,26 @@ export function suggestUpgrades(
   loadout: Loadout,
   monster: MonsterStats,
   mode: AccountMode,
-  opts?: { budget?: number; ownedItemIds?: number[]; prices?: PriceMap },
-): { best: UpgradeSuggestion[]; valueOrEase: UpgradeSuggestion[] } {
+  opts?: {
+    budget?: number;
+    /** Inclusive ceiling for near-affordable upgrades (defaults from budget). */
+    stretchBudget?: number;
+    ownedItemIds?: number[];
+    prices?: PriceMap;
+  },
+): {
+  best: UpgradeSuggestion[];
+  valueOrEase: UpgradeSuggestion[];
+  stretch: UpgradeSuggestion[];
+} {
   const baseItems = resolve(loadout.equipment);
   const baseDps = calculatePlayerDps(loadout, monster, baseItems).dps;
-  const candidates: UpgradeSuggestion[] = [];
+  const affordable: UpgradeSuggestion[] = [];
+  const stretchCandidates: UpgradeSuggestion[] = [];
+  const budget = opts?.budget;
+  const stretchCeiling =
+    opts?.stretchBudget ??
+    (budget != null ? defaultStretchBudget(budget) : undefined);
   const acquisitionCtx = {
     owned: new Set(opts?.ownedItemIds ?? []),
     prices: opts?.prices,
@@ -82,11 +100,14 @@ export function suggestUpgrades(
 
     if (mode === "main") {
       // Cost by how the item is really obtained: an Avernic defender is its
-      // hilt, and Ferocious gloves are a piece of hydra leather.
+      // hilt, and Ferocious gloves are a piece of hydra leather. Stretch
+      // candidates sit above cash-on-hand but within the near-budget ceiling.
       pool = pool.filter((i) => {
         const cost = acquisitionOf(i).cost;
         if (!Number.isFinite(cost)) return false;
-        return opts?.budget == null || cost <= opts.budget;
+        if (stretchCeiling != null) return cost <= stretchCeiling;
+        if (budget != null) return cost <= budget;
+        return true;
       });
     }
 
@@ -115,8 +136,10 @@ export function suggestUpgrades(
       const acquisition = acquisitionOf(upgrade);
       const gePrice = Number.isFinite(acquisition.cost) ? acquisition.cost : null;
       const dpsPerGp = gePrice && gePrice > 0 ? deltaDps / gePrice : null;
+      const cost = gePrice ?? 0;
+      const overBudget = mode === "main" && budget != null && cost > budget;
 
-      candidates.push({
+      const suggestion: UpgradeSuggestion = {
         slot,
         currentItem,
         upgradeItem: upgrade,
@@ -129,30 +152,43 @@ export function suggestUpgrades(
         dropSources: drops,
         easiestDrop,
         obtainScore,
-        kind: "best",
-      });
+        kind: overBudget ? "stretch" : "best",
+        shortfall: overBudget && budget != null ? shortfall(cost, budget) : undefined,
+      };
+
+      if (overBudget) stretchCandidates.push(suggestion);
+      else affordable.push(suggestion);
     }
   }
 
-  const best = [...candidates]
+  const best = [...affordable]
     .sort((a, b) => b.deltaDps - a.deltaDps)
     .slice(0, 8)
     .map((c) => ({ ...c, kind: "best" as const }));
 
   let valueOrEase: UpgradeSuggestion[];
   if (mode === "main") {
-    valueOrEase = [...candidates]
+    valueOrEase = [...affordable]
       .filter((c) => c.dpsPerGp != null && c.dpsPerGp > 0)
       .sort((a, b) => (b.dpsPerGp ?? 0) - (a.dpsPerGp ?? 0))
       .slice(0, 8)
       .map((c) => ({ ...c, kind: "value" as const }));
   } else {
-    valueOrEase = [...candidates]
+    valueOrEase = [...affordable]
       .filter((c) => c.obtainScore != null)
       .sort((a, b) => (a.obtainScore ?? Infinity) - (b.obtainScore ?? Infinity))
       .slice(0, 8)
       .map((c) => ({ ...c, kind: "easiest" as const }));
   }
 
-  return { best, valueOrEase };
+  // Prefer bigger DPS gains first; among equals, closer to affordability.
+  const stretch = [...stretchCandidates]
+    .sort(
+      (a, b) =>
+        b.deltaDps - a.deltaDps || (a.shortfall ?? 0) - (b.shortfall ?? 0),
+    )
+    .slice(0, 8)
+    .map((c) => ({ ...c, kind: "stretch" as const }));
+
+  return { best, valueOrEase, stretch };
 }

@@ -180,7 +180,7 @@ test("Wiki engine cross-check: Ursine beats zombie axe with melee gear on Araxxo
     onTask: true,
   };
   const ursine = calculatePlayerDps(
-    { ...base, equipment: { ...equipment, weapon: 27660 } },
+    { ...base, equipment: { ...equipment, weapon: 27657 } },
     monster,
     [],
   );

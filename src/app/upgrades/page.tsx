@@ -1,36 +1,43 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MonsterPicker } from "@/components/MonsterPicker";
 import { getMonsterById } from "@/lib/data";
 import { acquisitionLabel } from "@/lib/prices/acquisition";
+import { fetchLivePrices, type LivePriceSnapshot } from "@/lib/prices/livePrices";
+import { defaultStretchBudget } from "@/lib/prices/stretchBudget";
 import { suggestUpgrades } from "@/lib/upgrades/suggest";
 import { useAppStore } from "@/lib/store/useAppStore";
 import type { UpgradeSuggestion } from "@/lib/upgrades/suggest";
 
-function formatGp(n: number | null) {
-  if (n == null) return "—";
+function formatGp(n: number | null | undefined) {
+  if (n == null || !Number.isFinite(n)) return "—";
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+  return String(Math.round(n));
 }
 
 function UpgradeCard({
   title,
+  subtitle,
   items,
   mode,
   onApply,
 }: {
   title: string;
+  subtitle?: string;
   items: UpgradeSuggestion[];
   mode: "main" | "iron";
   onApply: (u: UpgradeSuggestion) => void;
 }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 space-y-3">
-      <h2 className="font-semibold text-[var(--accent)]">{title}</h2>
+      <div>
+        <h2 className="font-semibold text-[var(--accent)]">{title}</h2>
+        {subtitle && <p className="text-xs text-[var(--muted)] mt-1">{subtitle}</p>}
+      </div>
       {items.length === 0 && (
         <p className="text-sm text-[var(--muted)]">No upgrades found for this loadout.</p>
       )}
@@ -53,6 +60,12 @@ function UpgradeCard({
                   {acquisitionLabel(u.acquisition)} {formatGp(u.gePrice)}
                   {u.dpsPerGp != null && (
                     <> · {u.dpsPerGp.toExponential(2)} DPS/GP</>
+                  )}
+                  {u.shortfall != null && u.shortfall > 0 && (
+                    <span className="text-[var(--accent-2)]">
+                      {" "}
+                      · need {formatGp(u.shortfall)} more
+                    </span>
                   )}
                   {u.acquisition.note && <> · {u.acquisition.note}</>}
                 </div>
@@ -97,17 +110,31 @@ export default function UpgradesPage() {
     ownedItemIds,
     setEquipmentSlot,
   } = useAppStore();
-  const [ready, setReady] = useState(true);
+  const [prices, setPrices] = useState<LivePriceSnapshot | null>(null);
   const monster = getMonsterById(monsterId);
   const loadout = loadouts.find((l) => l.id === activeLoadoutId) ?? loadouts[0];
+  const stretchBudget =
+    accountMode === "main" ? defaultStretchBudget(budget) : undefined;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchLivePrices(controller.signal)
+      .then(setPrices)
+      .catch(() => {
+        /* synced prices still work via acquisition */
+      });
+    return () => controller.abort();
+  }, []);
 
   const suggestions = useMemo(() => {
-    if (!monster || !loadout || !ready) return { best: [], valueOrEase: [] };
+    if (!monster || !loadout) return { best: [], valueOrEase: [], stretch: [] };
     return suggestUpgrades(loadout, monster, accountMode, {
       budget: accountMode === "main" ? budget : undefined,
+      stretchBudget: accountMode === "main" ? stretchBudget : undefined,
       ownedItemIds: accountMode === "iron" ? ownedItemIds : undefined,
+      prices: prices?.prices,
     });
-  }, [monster, loadout, accountMode, budget, ownedItemIds, ready]);
+  }, [monster, loadout, accountMode, budget, stretchBudget, ownedItemIds, prices]);
 
   if (!monster || !loadout) return null;
 
@@ -117,7 +144,7 @@ export default function UpgradesPage() {
         <h1 className="text-2xl font-bold">Upgrade Advisor</h1>
         <p className="text-sm text-[var(--muted)]">
           Best DPS upgrade and most cost-effective (mains) or easiest to obtain (irons),
-          scored with the DPS calculator.
+          scored with the DPS calculator. Mains also see near-budget stretch upgrades.
         </p>
       </div>
 
@@ -156,7 +183,12 @@ export default function UpgradesPage() {
           </label>
           {accountMode === "main" && (
             <label className="block text-sm space-y-1">
-              <span className="text-xs text-[var(--muted)]">Max upgrade budget (GP)</span>
+              <span className="text-xs text-[var(--muted)]">
+                Max upgrade budget (GP)
+                {stretchBudget != null && (
+                  <> · stretch shows up to {formatGp(stretchBudget)}</>
+                )}
+              </span>
               <input
                 type="number"
                 value={budget}
@@ -172,12 +204,6 @@ export default function UpgradesPage() {
             </Link>{" "}
             first. Irons: import a bank on Best Setup so owned items are filtered out of suggestions.
           </p>
-          <button
-            type="button"
-            onClick={() => setReady((r) => !r)}
-            className="hidden"
-            aria-hidden
-          />
         </div>
       </div>
 
@@ -199,6 +225,16 @@ export default function UpgradesPage() {
           onApply={(u) => setEquipmentSlot(loadout.id, u.slot, u.upgradeItem.id)}
         />
       </div>
+
+      {accountMode === "main" && (
+        <UpgradeCard
+          title="Close to affordable"
+          subtitle={`Above your ${formatGp(budget)} budget, up to ${formatGp(stretchBudget)}. Shown so you can plan the next big buy.`}
+          items={suggestions.stretch}
+          mode={accountMode}
+          onApply={(u) => setEquipmentSlot(loadout.id, u.slot, u.upgradeItem.id)}
+        />
+      )}
     </div>
   );
 }

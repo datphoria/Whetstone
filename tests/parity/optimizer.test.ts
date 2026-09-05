@@ -181,8 +181,10 @@ test("regression: weapon and shield are paired before beam pruning", () => {
 
 test("regression: late strength gear keeps Ursine ahead of zombie axe", () => {
   const monster = araxxor();
+  // Bank often only has the GE form (uncharged). Outside Wilderness its DPS
+  // matches charged, and must still beat zombie axe.
   const itemIds = [
-    27660, // Ursine chainmace (charged)
+    27657, // Ursine chainmace (uncharged)
     28810, // Zombie axe
     11865, // Slayer helmet (i)
     21295, // Infernal cape
@@ -212,7 +214,7 @@ test("regression: late strength gear keeps Ursine ahead of zombie axe", () => {
   });
 
   assert.ok(best);
-  assert.equal(best.loadout.equipment.weapon, 27660);
+  assert.equal(best.loadout.equipment.weapon, 27657);
   assert.ok(best.dps > 9.8, `expected Ursine setup above 9.8 DPS, got ${best.dps}`);
 });
 

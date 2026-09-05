@@ -14,7 +14,7 @@ import {
 import type { Loadout, MonsterStats } from "@/lib/types";
 
 /** Which pass of a bank-then-upgrades search a message belongs to. */
-export type BestSetupStage = "bank" | "target";
+export type BestSetupStage = "bank" | "target" | "stretch";
 
 export type BestSetupWorkerRequest =
   | {
